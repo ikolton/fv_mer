@@ -2,7 +2,6 @@
 #SBATCH --job-name=fvlm-setup
 #SBATCH --partition=plgrid-gpu-gh200
 #SBATCH --nodes=1
-#SBATCH --exclude=x1002c4s0b1n0
 #SBATCH --ntasks=1
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
@@ -22,9 +21,12 @@ set -e
 if [[ "$MODULE_STATUS" -ne 0 ]]; then
   echo "WARNING: ML-bundle returned $MODULE_STATUS; continuing to the Python preflight." >&2
 fi
-python -m venv --system-site-packages .venv
+python -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip setuptools wheel
+python -m pip install \
+  /net/software/aarch64/el8/wheels/ML-bundle/24.06a/torch-2.6.0+cu124.post3-cp311-cp311-linux_aarch64.whl \
+  /net/software/aarch64/el8/wheels/ML-bundle/24.06a/torchvision-0.21.0+cu124torch260-cp311-cp311-linux_aarch64.whl
 python -m pip install -e '.[test]'
 python -m fvlm_merlin.cli download-assets
 python - <<'PY'
