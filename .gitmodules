@@ -1,3 +1,4 @@
 [submodule "fvlm"]
 	path = fvlm
 	url = https://github.com/alibaba-damo-academy/fvlm.git
+	ignore = untracked
