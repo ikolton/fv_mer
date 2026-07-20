@@ -6,6 +6,17 @@ Train the fVLM visual-language encoder on abdominal CT data and export reusable 
 
 fVLM learns organ-aware CT representations by connecting each segmented anatomical region with the part of the report that describes it. This adaptation applies that idea to abdominal studies: every volume is paired with an 11-organ segmentation, organ-specific findings, and abnormality labels. The datasets are brought into a common physical space, their segmentation labels are mapped to one organ order, and matching image crops and text are passed through the original fVLM learning objective. The result is a visual encoder that produces one reusable representation per abdominal organ while preserving the spatial and textual structure of the source method.
 
+## Project layout
+
+- `configs/data/` defines dataset roots, annotations, and split membership.
+- `configs/train/` contains full and smoke training configurations.
+- `src/fvlm_merlin/` contains manifest preparation, preprocessing, the abdominal fVLM adapter, validation, training, and feature export.
+- `scripts/` provides the commands normally run from a Helios login node.
+- `slurm/` contains the compute-node jobs used by those commands.
+- `tests/` covers manifests, geometry, volume validation, and feature-cache integrity.
+- `fvlm/` is the pinned source implementation used by the adapter.
+- `outputs/`, `logs/`, `assets/`, and `.venv/` are created locally and ignored by Git.
+
 ## Quick start on Helios
 
 The repository is configured for GH200 nodes and the shared converted datasets under `/net/storage/pr3/plgrid/plggjmiag`. Generated manifests, logs, checkpoints, and features stay inside the repository.
@@ -57,6 +68,17 @@ RESUME_CHECKPOINT=/path/to/checkpoint.pth ./scripts/submit_train.sh pooled 4
 ```
 
 Run files are grouped under `outputs/runs/<preset>-<job-id>`. The run root contains the resolved configuration and metadata with the source revisions, training-manifest checksum, SLURM job ID, and world size. Checkpoints are stored in the timestamped fVLM subdirectory.
+
+### Monitor jobs
+
+Each submission command prints its job ID and log path. Check its scheduler state and follow the log with:
+
+```bash
+squeue -j <job-id>
+tail -f logs/train_<job-id>.out
+```
+
+Data checks use `logs/data_check_<job-id>.out`, and smoke tests use `logs/smoke_<job-id>.out`. A successful smoke finishes with exit code zero and creates `checkpoint_best.pth` under its run directory. A full training run writes validation metrics to the timestamped `log.txt` and updates `checkpoint_best.pth` whenever validation loss improves.
 
 ## Export features
 
