@@ -14,7 +14,13 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 source /usr/share/lmod/lmod/init/bash >/dev/null 2>&1 || true
+set +e
 module load ML-bundle/24.06a
+MODULE_STATUS=$?
+set -e
+if [[ "$MODULE_STATUS" -ne 0 ]]; then
+  echo "WARNING: ML-bundle returned $MODULE_STATUS; continuing to the Python preflight." >&2
+fi
 python -m venv --system-site-packages .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip setuptools wheel
@@ -25,7 +31,7 @@ import torch
 import transformers
 import fvlm_merlin
 assert transformers.__version__ == "4.25.0"
+assert torch.cuda.is_available()
 print("torch", torch.__version__, "cuda", torch.cuda.is_available())
 print("fvlm_merlin", fvlm_merlin.__version__)
 PY
-

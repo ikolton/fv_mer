@@ -14,9 +14,16 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 source /usr/share/lmod/lmod/init/bash >/dev/null 2>&1 || true
+set +e
 module load ML-bundle/24.06a
+MODULE_STATUS=$?
+set -e
+if [[ "$MODULE_STATUS" -ne 0 ]]; then
+  echo "WARNING: ML-bundle returned $MODULE_STATUS; continuing to the CUDA preflight." >&2
+fi
 source .venv/bin/activate
 export FVLM_MERLIN_ROOT="$ROOT"
+python -c 'import torch; assert torch.cuda.is_available(); print("gpus", torch.cuda.device_count())'
 mkdir -p outputs/manifests/smoke outputs/runs/smoke logs
 fvlm-merlin build-manifest --config "configs/data/${DATA_PRESET:-merlin}.yaml" \
   --output-dir outputs/manifests/smoke --limit-per-split 8 --prefer-abnormal

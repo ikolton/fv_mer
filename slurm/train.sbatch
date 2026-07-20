@@ -9,10 +9,17 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 source /usr/share/lmod/lmod/init/bash >/dev/null 2>&1 || true
+set +e
 module load ML-bundle/24.06a
+MODULE_STATUS=$?
+set -e
+if [[ "$MODULE_STATUS" -ne 0 ]]; then
+  echo "WARNING: ML-bundle returned $MODULE_STATUS; continuing to the CUDA preflight." >&2
+fi
 source .venv/bin/activate
 export FVLM_MERLIN_ROOT="$ROOT"
 export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-16}"
+python -c 'import torch; assert torch.cuda.is_available(); print("gpus", torch.cuda.device_count())'
 
 PRESET="${DATA_PRESET:-pooled}"
 MANIFEST_DIR="$ROOT/outputs/manifests/$PRESET"
