@@ -14,6 +14,7 @@ set -euo pipefail
 ROOT="${FVLM_MERLIN_ROOT:-${SLURM_SUBMIT_DIR:?Submit smoke through scripts/submit_smoke.sh}}"
 cd "$ROOT"
 source /usr/share/lmod/lmod/init/bash >/dev/null 2>&1 || true
+module purge >/dev/null 2>&1 || true
 set +e
 module load ML-bundle/24.06a
 MODULE_STATUS=$?
