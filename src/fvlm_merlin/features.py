@@ -124,17 +124,40 @@ def export(manifest_path: Path, config_path: Path, checkpoint_path: Path, output
 def merge(output_path: Path, shard_paths: list[Path]) -> None:
     if output_path.exists():
         raise FileExistsError(f"Output already exists: {output_path}")
+    if not shard_paths:
+        raise ValueError("At least one feature shard is required")
     records = {}
     metadata = []
+    provenance = None
+    shard_indices = set()
     for path in shard_paths:
         payload = torch.load(path, map_location="cpu")
         if payload.get("schema") != SCHEMA or tuple(payload.get("organ_names", ())) != ORGAN_NAMES:
             raise ValueError(f"Incompatible feature shard: {path}")
+        shard_metadata = payload.get("metadata", {})
+        required = {"checkpoint", "manifest_sha256", "num_shards", "shard_index"}
+        missing = required - shard_metadata.keys()
+        if missing:
+            raise ValueError(f"Feature shard lacks metadata {sorted(missing)}: {path}")
+        identity = tuple(shard_metadata[key] for key in ("checkpoint", "manifest_sha256", "num_shards"))
+        if provenance is None:
+            provenance = identity
+        elif identity != provenance:
+            raise ValueError(f"Feature shards have different provenance: {path}")
+        shard_index = int(shard_metadata["shard_index"])
+        if shard_index in shard_indices:
+            raise ValueError(f"Duplicate shard index {shard_index}: {path}")
+        shard_indices.add(shard_index)
         overlap = records.keys() & payload["records"].keys()
         if overlap:
             raise ValueError(f"Duplicate records in feature shards: {sorted(overlap)[:5]}")
         records.update(payload["records"])
-        metadata.append(payload["metadata"])
+        metadata.append(shard_metadata)
+    expected_indices = set(range(int(provenance[2])))
+    if shard_indices != expected_indices:
+        raise ValueError(
+            f"Incomplete feature shards: expected {sorted(expected_indices)}, got {sorted(shard_indices)}"
+        )
     merged = {"schema": SCHEMA, "organ_names": ORGAN_NAMES, "records": records,
               "metadata": {"merged_shards": metadata}}
     output_path.parent.mkdir(parents=True, exist_ok=True)

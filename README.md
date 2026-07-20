@@ -1,63 +1,113 @@
 # fVLM Merlin
 
-Train the fVLM visual-language encoder on abdominal CT data and export reusable per-organ features. The project uses the original fVLM objective with an 11-organ abdominal model.
+Train the fVLM visual-language encoder on abdominal CT data and export reusable per-organ features. The project adapts the original fVLM objective to an 11-organ abdominal model.
 
-## Helios setup
+## Quick start on Helios
 
-The tested environment is a GH200 compute node. Dataset presets point to the team storage under `/net/storage/pr3/plgrid/plggjmiag` and never write there.
+The repository is configured for GH200 nodes and the shared converted datasets under `/net/storage/pr3/plgrid/plggjmiag`. Generated manifests, logs, checkpoints, and features stay inside the repository.
 
 ```bash
-git clone --recurse-submodules <repository-url>
-cd fvlm_merlin
+git clone --recurse-submodules https://github.com/ikolton/fv_mer.git
+cd fv_mer
 ./scripts/setup_helios.sh
+```
+
+Setup submits a short GH200 job, creates `.venv`, installs the package, and downloads the MAE and CXR-BERT initial weights into `assets/`. The script waits for completion and reports any setup failure directly. The environment is built for the compute-node architecture, so use it from batch jobs or an interactive GH200 allocation.
+
+### 1. Check the data
+
+```bash
 ./scripts/check_data.sh pooled
+```
+
+This queues a job that builds portable train and validation manifests, checks split overlap and file availability, and opens a small sample of image-mask pairs to verify NIfTI geometry and organ labels. The job ID and log path are printed after submission. Use `merlin` instead of `pooled` to select only Merlin data.
+
+The presets are:
+
+- `merlin`: Merlin training data and its validation manifest.
+- `pooled`: Merlin, Swiss, and Turkish training data with the Merlin validation manifest.
+
+Training optimizes the train split with the original fVLM pretraining task. The validation manifest is prepared for data checks and downstream evaluation.
+
+### 2. Run a smoke test
+
+```bash
 ./scripts/submit_smoke.sh merlin
+./scripts/submit_smoke.sh merlin 2
+```
+
+The first command tests one GPU; the second tests the distributed two-GPU path. Each smoke job selects eight studies per split, runs one short training epoch, and writes a checkpoint under `outputs/runs/`. Run at least the two-GPU smoke before a multi-GPU training job.
+
+### 3. Train
+
+```bash
 ./scripts/submit_train.sh pooled 4
 ```
 
-Pass `2` as the second smoke argument to verify DDP: `./scripts/submit_smoke.sh merlin 2`.
+The first argument selects the data preset and the second selects two or four GPUs. Training rebuilds the selected manifest, runs its data checks, and launches fVLM through PyTorch distributed training. Logs are written to `logs/train_<job-id>.out` and `logs/train_<job-id>.err`.
 
-`setup_helios.sh` creates `.venv` on a compute node and downloads initial weights to `assets/`. Jobs activate that environment themselves; do not use it on the login node.
-
-Use `merlin` for Merlin train/validation or `pooled` for Merlin, Swiss, and Turkish training with Merlin validation. A 2-GPU run uses the same configuration:
-
-```bash
-./scripts/submit_train.sh pooled 2
-```
-
-To resume, submit the generic job with `RESUME_CHECKPOINT` set:
+To resume a compatible run:
 
 ```bash
 RESUME_CHECKPOINT=/path/to/checkpoint.pth ./scripts/submit_train.sh pooled 4
 ```
 
-Run outputs are placed in `outputs/runs/<preset>-<job-id>`. Each run records its resolved configuration, manifest checksum, revisions, and SLURM metadata.
+Run files are grouped under `outputs/runs/<preset>-<job-id>`. The run root contains the resolved configuration and metadata with the source revisions, training-manifest checksum, SLURM job ID, and world size. Checkpoints are stored in the timestamped fVLM subdirectory.
 
-## Commands
+## Export features
 
-Inside a compute job or interactive GH200 allocation:
+Feature export loads a trained checkpoint and produces one normalized embedding and presence flag for every organ, plus a pooled study embedding. The output records the organ order and preprocessing provenance for downstream use.
+
+Run this inside a GH200 job or interactive allocation:
+
+```bash
+fvlm-merlin export-features \
+  --manifest outputs/manifests/pooled/val.json \
+  --config configs/train/gh200.yaml \
+  --checkpoint /path/to/checkpoint.pth \
+  --output outputs/features/pooled-val.pt
+```
+
+For a large manifest, split extraction across jobs by giving each job the same shard count and a different zero-based shard index:
+
+```bash
+MANIFEST=outputs/manifests/pooled/val.json
+CHECKPOINT=/path/to/checkpoint.pth
+for SHARD in 0 1 2 3; do
+  fvlm-merlin export-features \
+    --manifest "$MANIFEST" \
+    --config configs/train/gh200.yaml \
+    --checkpoint "$CHECKPOINT" \
+    --output "outputs/features/pooled-val.shard${SHARD}.pt" \
+    --num-shards 4 \
+    --shard-index "$SHARD"
+done
+fvlm-merlin export-features \
+  --output outputs/features/pooled-val.pt \
+  --merge outputs/features/pooled-val.shard{0,1,2,3}.pt
+```
+
+Merging verifies the schema, checkpoint, manifest checksum, shard count, and record uniqueness before writing the final file.
+
+## Data presets
+
+Data presets in `configs/data/` define shared roots, annotations, and split membership. Generated manifests retain root aliases and relative image paths, making them portable between users with access to the same roots. Rows without converted image or mask files are skipped by the shared presets and listed in `summary.json`.
+
+Images and masks are resampled together to 1.5 mm isotropic spacing. Images use continuous interpolation and masks use nearest-neighbour interpolation before fVLM cropping. Source segmentation IDs are remapped to the fixed organ order in `src/fvlm_merlin/organs.py`.
+
+Dataset captions are passed through unchanged. The fVLM objective identifies canonical normal captions by their normal-text prefix.
+
+To support another dataset layout, copy a preset and update its roots and annotation paths. For another Linux/CUDA system, create an environment with compatible PyTorch and MONAI versions, install the package with `pip install -e '.[test]'`, and use the same CLI commands. Set `FVLM_ROOT` to use an fVLM checkout outside the repository.
+
+## Direct commands
+
+The scripts above are the normal Helios entry points. Their underlying commands are useful for debugging inside a compute allocation:
 
 ```bash
 fvlm-merlin build-manifest --config configs/data/pooled.yaml --output-dir outputs/manifests/pooled
 fvlm-merlin validate outputs/manifests/pooled/train.json outputs/manifests/pooled/val.json
 fvlm-merlin train --config configs/train/gh200.yaml
-fvlm-merlin export-features --manifest MANIFEST --config configs/train/gh200.yaml --checkpoint CHECKPOINT --output FEATURES.pt
+pytest -q
 ```
 
-Feature extraction can be sharded with `--num-shards` and `--shard-index`. Merge completed shards with:
-
-```bash
-fvlm-merlin export-features --output features.pt --merge features.shard*.pt
-```
-
-The feature file contains the fixed organ order, one embedding and presence flag per organ, a pooled study embedding, and preprocessing provenance. It is independent of downstream decoder code.
-
-## Data and configuration
-
-Data presets contain shared roots and source split definitions. Copy a preset to use another dataset layout. Generated manifests retain root aliases and relative paths, so they can move between users who share the same data roots. Missing files are errors by default. The shared presets explicitly exclude stale metadata rows without converted volumes and record every exclusion in `summary.json`.
-
-Images and masks are resampled together to 1.5 mm isotropic spacing. Images use continuous interpolation and masks use nearest-neighbour interpolation before fVLM cropping.
-
-Dataset captions are passed through unchanged. The fVLM objective identifies canonical normal captions by their normal-text prefix.
-
-For another Linux/CUDA system, create a Python environment with a compatible PyTorch and MONAI installation, install this package with `pip install -e '.[test]'`, set dataset roots in a data preset, and use the same CLI commands. Set `FVLM_ROOT` to use an fVLM checkout outside this repository.
+`validate` opens two volumes per dataset by default; change the coverage with `--samples-per-dataset N`.

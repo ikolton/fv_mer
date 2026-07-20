@@ -95,13 +95,7 @@ def build(config_path: Path, output_dir: Path, limit_per_split: int | None = Non
     paths = {}
     for split, records in splits.items():
         if limit_per_split is not None:
-            if prefer_abnormal:
-                records = sorted(
-                    records,
-                    key=lambda row: sum(int(value) for value in row["organ_labels"].values()),
-                    reverse=True,
-                )
-            records = records[:limit_per_split]
+            records = _limited(records, limit_per_split, prefer_abnormal)
             splits[split] = records
         path = output_dir / f"{split}.json"
         path.write_text(json.dumps({"roots": root_payload, "records": records}, indent=2), encoding="utf-8")
@@ -116,6 +110,33 @@ def build(config_path: Path, output_dir: Path, limit_per_split: int | None = Non
     summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True), encoding="utf-8")
     paths["summary"] = summary_path
     return paths
+
+
+def _limited(records: list[dict[str, Any]], limit: int, prefer_abnormal: bool) -> list[dict[str, Any]]:
+    if limit < 0:
+        raise ValueError("Split limit must be non-negative")
+    groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in records:
+        groups[row["dataset"]].append(row)
+    if prefer_abnormal:
+        for rows in groups.values():
+            rows.sort(
+                key=lambda row: sum(int(value) for value in row["organ_labels"].values()),
+                reverse=True,
+            )
+    selected = []
+    offsets = {dataset: 0 for dataset in groups}
+    while len(selected) < limit:
+        added = False
+        for dataset, rows in groups.items():
+            offset = offsets[dataset]
+            if offset < len(rows) and len(selected) < limit:
+                selected.append(rows[offset])
+                offsets[dataset] += 1
+                added = True
+        if not added:
+            break
+    return selected
 
 
 def load(path: Path) -> tuple[dict[str, Path], list[dict[str, Any]]]:

@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from fvlm_merlin.manifest import build, load, resolve_paths
+from fvlm_merlin.manifest import _limited, build, load, resolve_paths
 from fvlm_merlin.organs import ORGAN_BY_NAME, ORGAN_NAMES, remap_mask
 
 
@@ -65,3 +65,20 @@ def test_mask_remap_preserves_organ_identity() -> None:
     assert dense[1, 0] == ORGAN_BY_NAME["urinary bladder"].dense_id
     assert dense[1, 1] == 0
 
+
+def test_limited_pooled_manifest_represents_each_dataset() -> None:
+    rows = []
+    for dataset in ("merlin", "swiss", "turkish"):
+        for index in range(4):
+            rows.append({
+                "dataset": dataset,
+                "study_id": f"{dataset}-{index}",
+                "organ_labels": {name: int(index == 3) for name in ORGAN_NAMES},
+            })
+
+    selected = _limited(rows, limit=6, prefer_abnormal=True)
+
+    assert [row["dataset"] for row in selected] == [
+        "merlin", "swiss", "turkish", "merlin", "swiss", "turkish"
+    ]
+    assert all(sum(row["organ_labels"].values()) for row in selected[:3])
