@@ -2,6 +2,10 @@
 
 Train the fVLM visual-language encoder on abdominal CT data and export reusable per-organ features. The project adapts the original fVLM objective to an 11-organ abdominal model.
 
+## Approach
+
+fVLM learns organ-aware CT representations by connecting each segmented anatomical region with the part of the report that describes it. This adaptation applies that idea to abdominal studies: every volume is paired with an 11-organ segmentation, organ-specific findings, and abnormality labels. The datasets are brought into a common physical space, their segmentation labels are mapped to one organ order, and matching image crops and text are passed through the original fVLM learning objective. The result is a visual encoder that produces one reusable representation per abdominal organ while preserving the spatial and textual structure of the source method.
+
 ## Quick start on Helios
 
 The repository is configured for GH200 nodes and the shared converted datasets under `/net/storage/pr3/plgrid/plggjmiag`. Generated manifests, logs, checkpoints, and features stay inside the repository.
