@@ -1,0 +1,48 @@
+model:
+  arch: abdominal_blip_pretrain
+  model_type: abdominal
+  load_pretrained: false
+  load_finetuned: false
+  mae_ckpt_path: ${oc.env:FVLM_MERLIN_ROOT}/assets/mae_pretrain_vit_base.pth
+  med_config_path: ${oc.env:FVLM_MERLIN_ROOT}/configs/model/biomed_cxrbert.json
+  embed_dim: 256
+  alpha: 0.5
+  max_txt_len: 384
+
+datasets:
+  abdominal_fvlm_caption:
+    vis_processor:
+      train: {name: blip_image_train}
+      eval: {name: blip_image_train}
+    text_processor:
+      train: {name: blip_caption}
+      eval: {name: blip_caption}
+    build_info:
+      annotations:
+        train: {storage: "${oc.env:FVLM_MERLIN_ROOT}/outputs/manifests/smoke/train.json"}
+        val: {storage: "${oc.env:FVLM_MERLIN_ROOT}/outputs/manifests/smoke/val.json"}
+      images: {storage: /}
+
+run:
+  task: image_text_pretrain
+  lr_sched: linear_warmup_cosine_lr
+  init_lr: 1e-4
+  min_lr: 1e-6
+  warmup_lr: 1e-6
+  weight_decay: 0.05
+  max_epoch: 1
+  batch_size_train: 2
+  batch_size_eval: 2
+  num_workers: 0
+  warmup_steps: 1
+  log_freq: 1
+  seed: 42
+  output_dir: ${oc.env:FVLM_MERLIN_ROOT}/outputs/runs/smoke
+  amp: false
+  resume_ckpt_path:
+  evaluate: false
+  train_splits: [train]
+  device: cuda
+  world_size: 1
+  dist_url: env://
+  distributed: true

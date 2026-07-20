@@ -1,0 +1,14 @@
+roots:
+  merlin: /net/storage/pr3/plgrid/plggjmiag/Merlin_converted
+
+sources:
+  - dataset: merlin
+    split: train
+    annotation: train/combined.json
+    image_split: train
+    on_missing: exclude
+  - dataset: merlin
+    split: val
+    annotation: val/combined.json
+    image_split: val
+    on_missing: exclude

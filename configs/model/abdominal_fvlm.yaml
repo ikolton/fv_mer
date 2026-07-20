@@ -1,0 +1,35 @@
+model:
+  arch: abdominal_blip_pretrain
+  model_type: abdominal
+  load_pretrained: false
+  load_finetuned: false
+  mae_ckpt_path: ${oc.env:FVLM_MERLIN_ROOT}/assets/mae_pretrain_vit_base.pth
+  med_config_path: ${oc.env:FVLM_MERLIN_ROOT}/configs/model/biomed_cxrbert.json
+  embed_dim: 256
+  alpha: 0.5
+  max_txt_len: 384
+
+preprocess:
+  vis_processor:
+    train:
+      name: blip_image_train
+    eval:
+      name: blip_image_train
+  text_processor:
+    train:
+      name: blip_caption
+    eval:
+      name: blip_caption
+
+datasets:
+  abdominal_fvlm_caption:
+    data_type: images
+    build_info:
+      annotations:
+        train:
+          storage: ${oc.env:FVLM_MERLIN_ROOT}/outputs/manifests/pooled/train.json
+        val:
+          storage: ${oc.env:FVLM_MERLIN_ROOT}/outputs/manifests/pooled/val.json
+      images:
+        storage: /
+

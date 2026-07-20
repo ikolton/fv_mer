@@ -1,0 +1,9 @@
+.venv/
+assets/
+BiomedVLP-CXR-BERT-specialized
+outputs/
+logs/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/

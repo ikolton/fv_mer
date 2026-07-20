@@ -1,0 +1,24 @@
+roots:
+  merlin: /net/storage/pr3/plgrid/plggjmiag/Merlin_converted
+  swiss: /net/storage/pr3/plgrid/plggjmiag/Swiss_converted
+  turkish: /net/storage/pr3/plgrid/plggjmiag/Turkish_converted
+
+sources:
+  - dataset: merlin
+    split: train
+    annotation: train/combined.json
+    image_split: train
+    on_missing: exclude
+  - dataset: swiss
+    split: train
+    annotation: combined.json
+    on_missing: exclude
+  - dataset: turkish
+    split: train
+    annotation: combined.json
+    on_missing: exclude
+  - dataset: merlin
+    split: val
+    annotation: val/combined.json
+    image_split: val
+    on_missing: exclude

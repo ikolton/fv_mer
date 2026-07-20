@@ -1,0 +1,31 @@
+#!/bin/bash
+#SBATCH --job-name=fvlm-setup
+#SBATCH --partition=plgrid-gpu-gh200
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --gres=gpu:1
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=32G
+#SBATCH --time=01:00:00
+#SBATCH --output=logs/setup_%j.out
+#SBATCH --error=logs/setup_%j.err
+
+set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+source /usr/share/lmod/lmod/init/bash >/dev/null 2>&1 || true
+module load ML-bundle/24.06a
+python -m venv --system-site-packages .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip setuptools wheel
+python -m pip install -e '.[test]'
+python -m fvlm_merlin.cli download-assets
+python - <<'PY'
+import torch
+import transformers
+import fvlm_merlin
+assert transformers.__version__ == "4.25.0"
+print("torch", torch.__version__, "cuda", torch.cuda.is_available())
+print("fvlm_merlin", fvlm_merlin.__version__)
+PY
+
