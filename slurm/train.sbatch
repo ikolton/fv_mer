@@ -30,7 +30,7 @@ RUN_DIR="$ROOT/outputs/runs/${RUN_NAME:-${PRESET}-${SLURM_JOB_ID}}"
 mkdir -p "$RUN_DIR" logs
 
 fvlm-merlin build-manifest --config "$ROOT/configs/data/$PRESET.yaml" --output-dir "$MANIFEST_DIR"
-fvlm-merlin validate "$MANIFEST_DIR/train.json" "$MANIFEST_DIR/val.json"
+fvlm-merlin validate "$MANIFEST_DIR/train.json" "$MANIFEST_DIR/val.json" --max-per-dataset 2 --workers 4
 
 OPTIONS=(
   "datasets.abdominal_fvlm_caption.build_info.annotations.train.storage=$MANIFEST_DIR/train.json"

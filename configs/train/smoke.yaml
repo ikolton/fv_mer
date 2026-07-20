@@ -13,7 +13,7 @@ datasets:
   abdominal_fvlm_caption:
     vis_processor:
       train: {name: blip_image_train}
-      eval: {name: blip_image_train}
+      eval: {name: abdominal_image_eval}
     text_processor:
       train: {name: blip_caption}
       eval: {name: blip_caption}
@@ -24,7 +24,7 @@ datasets:
       images: {storage: /}
 
 run:
-  task: image_text_pretrain
+  task: abdominal_image_text_pretrain
   lr_sched: linear_warmup_cosine_lr
   init_lr: 1e-4
   min_lr: 1e-6
@@ -42,6 +42,7 @@ run:
   resume_ckpt_path:
   evaluate: false
   train_splits: [train]
+  valid_splits: [val]
   device: cuda
   world_size: 1
   dist_url: env://

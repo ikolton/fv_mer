@@ -25,6 +25,9 @@ try:
     from lavis.models.blip_models.blip_pretrain import BlipPretrain
     from lavis.models.blip_models.vit import ViT
     from lavis.models.med import XBertEncoder
+    from lavis.processors.base_processor import BaseProcessor
+    from lavis.tasks.image_text_pretrain import ImageTextPretrainTask
+    from lavis.datasets.data_utils import prepare_sample
     import torch.nn.functional as F
 except ImportError as exc:
     raise RuntimeError("fVLM is not importable; run through the project environment") from exc
@@ -70,6 +73,68 @@ class AbdominalBuilder(BaseDatasetBuilder):
     train_dataset_cls = AbdominalDataset
     eval_dataset_cls = AbdominalDataset
     DATASET_CONFIG_DICT = {"default": str(PROJECT_ROOT / "configs/model/abdominal_fvlm.yaml")}
+
+
+@registry.register_processor("abdominal_image_eval")
+class AbdominalImageEvalProcessor(BaseProcessor):
+    def __init__(self):
+        from monai.transforms import CenterSpatialCropd, Compose, ToTensord
+
+        self.transform = Compose([
+            CenterSpatialCropd(keys=("image", "label"), roi_size=ROI_SIZE),
+            ToTensord(keys=("image", "label")),
+        ])
+
+    def __call__(self, item):
+        return self.transform(item)
+
+    @classmethod
+    def from_config(cls, cfg=None):
+        return cls()
+
+
+@registry.register_task("abdominal_image_text_pretrain")
+class AbdominalImageTextPretrainTask(ImageTextPretrainTask):
+    @torch.no_grad()
+    def evaluation(self, model, data_loader, cuda_enabled=True):
+        import torch.distributed as dist
+
+        totals = torch.zeros(2 + len(ORGAN_NAMES) * 2, dtype=torch.float64, device=model.device)
+        for samples in data_loader:
+            samples = prepare_sample(samples, cuda_enabled=cuda_enabled)
+            output = model(samples)
+            organ_losses = output["organ_wise_loss_itm"]
+            if not organ_losses:
+                continue
+            batch_size = int(samples["image"].shape[0])
+            totals[0] += output["loss"].detach().double() * batch_size
+            totals[1] += batch_size
+            for index, organ in enumerate(ORGAN_NAMES):
+                key = f"{organ}_itc"
+                if key in organ_losses:
+                    totals[2 + index * 2] += organ_losses[key].detach().double() * batch_size
+                    totals[3 + index * 2] += batch_size
+        if dist.is_available() and dist.is_initialized():
+            dist.all_reduce(totals, op=dist.ReduceOp.SUM)
+        if not torch.isfinite(totals).all():
+            raise RuntimeError("Validation produced non-finite losses")
+        if totals[1] == 0:
+            raise RuntimeError("Validation produced no active organ losses")
+        result = {
+            "loss": float((totals[0] / totals[1]).item()),
+            "studies": int(totals[1].item()),
+        }
+        for index, organ in enumerate(ORGAN_NAMES):
+            count = totals[3 + index * 2]
+            if count > 0:
+                result[f"{organ}_itc"] = float((totals[2 + index * 2] / count).item())
+        return result
+
+    def after_evaluation(self, val_result, **kwargs):
+        return {
+            **val_result,
+            "agg_metrics": 1.0 / (1.0 + val_result["loss"]),
+        }
 
 
 @registry.register_model("abdominal_blip_pretrain")
@@ -131,4 +196,3 @@ def convert_mae_state_dict(state: dict[str, torch.Tensor]) -> dict[str, torch.Te
         else:
             converted[key.replace("fc", "linear").replace("proj", "out_proj")] = value
     return converted
-

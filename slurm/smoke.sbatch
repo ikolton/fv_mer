@@ -30,6 +30,6 @@ python -c 'import torch; assert torch.cuda.is_available(); print("gpus", torch.c
 mkdir -p outputs/manifests/smoke outputs/runs/smoke logs
 fvlm-merlin build-manifest --config "configs/data/${DATA_PRESET:-merlin}.yaml" \
   --output-dir outputs/manifests/smoke --limit-per-split 8 --prefer-abnormal
-fvlm-merlin validate outputs/manifests/smoke/train.json outputs/manifests/smoke/val.json --samples-per-dataset 1
+fvlm-merlin validate outputs/manifests/smoke/train.json outputs/manifests/smoke/val.json --workers 4
 python -m torch.distributed.run --nproc_per_node="${GPUS:-1}" -m fvlm_merlin.cli train --config configs/train/smoke.yaml \
   --options "run.output_dir=$ROOT/outputs/runs/smoke-${SLURM_JOB_ID}"

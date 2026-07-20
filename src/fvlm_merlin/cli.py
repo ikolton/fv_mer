@@ -17,11 +17,12 @@ def _parser() -> argparse.ArgumentParser:
     build.add_argument(
         "--prefer-abnormal", action="store_true", help="Select abnormal studies first when limiting"
     )
-    validate = commands.add_parser("validate", help="Check manifests and sampled image-mask pairs")
+    validate = commands.add_parser("validate", help="Check manifests and image-mask pairs")
     validate.add_argument("manifests", type=Path, nargs="+", help="Manifest JSON files")
     validate.add_argument(
-        "--samples-per-dataset", type=int, default=2, help="Volumes opened per dataset (default: 2)"
+        "--max-per-dataset", type=int, help="Limit volume checks per dataset; default checks all"
     )
+    validate.add_argument("--workers", type=int, default=4, help="Parallel volume checks (default: 4)")
     train = commands.add_parser("train", help="Run fVLM training from a configuration")
     train.add_argument("--config", type=Path, required=True, help="Training YAML")
     train.add_argument("--options", nargs="*", help="LAVIS configuration overrides")
@@ -47,7 +48,7 @@ def main() -> None:
             print(f"{name}={path}")
     elif args.command == "validate":
         from .validate import run
-        run(args.manifests, args.samples_per_dataset)
+        run(args.manifests, args.max_per_dataset, args.workers)
     elif args.command == "train":
         from .training import run
         run(args.config, args.options)

@@ -20,14 +20,14 @@ Setup submits a short GH200 job, creates `.venv`, installs the package, and down
 ./scripts/check_data.sh pooled
 ```
 
-This queues a job that builds portable train and validation manifests, checks split overlap and file availability, and opens a small sample of image-mask pairs to verify NIfTI geometry and organ labels. The job ID and log path are printed after submission. Use `merlin` instead of `pooled` to select only Merlin data.
+This queues an exhaustive data-validation job. It builds portable train and validation manifests, checks split overlap and file availability, and opens every image-mask pair to verify NIfTI geometry and supported organ labels. Checks run in parallel and may take a while on the pooled dataset. The job ID and log path are printed after submission. Use `merlin` instead of `pooled` to select only Merlin data.
 
 The presets are:
 
 - `merlin`: Merlin training data and its validation manifest.
 - `pooled`: Merlin, Swiss, and Turkish training data with the Merlin validation manifest.
 
-Training optimizes the train split with the original fVLM pretraining task. The validation manifest is prepared for data checks and downstream evaluation.
+Training optimizes the original fVLM objective on the train split. After every epoch it evaluates the same objective on the complete Merlin validation split using deterministic 3D center crops. Validation logs include total and organ-wise losses, and the lowest total validation loss selects `checkpoint_best.pth`.
 
 ### 2. Run a smoke test
 
@@ -44,7 +44,7 @@ The first command tests one GPU; the second tests the distributed two-GPU path. 
 ./scripts/submit_train.sh pooled 4
 ```
 
-The first argument selects the data preset and the second selects two or four GPUs. Training rebuilds the selected manifest, runs its data checks, and launches fVLM through PyTorch distributed training. Logs are written to `logs/train_<job-id>.out` and `logs/train_<job-id>.err`.
+The first argument selects the data preset and the second selects two or four GPUs. Training rebuilds the selected manifest, checks a small image-mask sample as a fast preflight, and launches fVLM through PyTorch distributed training. Run `check_data.sh` once for exhaustive validation before the first full training job. Logs are written to `logs/train_<job-id>.out` and `logs/train_<job-id>.err`.
 
 To resume a compatible run:
 
@@ -110,4 +110,4 @@ fvlm-merlin train --config configs/train/gh200.yaml
 pytest -q
 ```
 
-`validate` opens two volumes per dataset by default; change the coverage with `--samples-per-dataset N`.
+`validate` checks every volume by default. Use `--max-per-dataset N` for a quick preflight and `--workers N` to control parallel reads.
