@@ -9,7 +9,7 @@ import torch
 from torch import nn
 
 from .config import PROJECT_ROOT
-from .geometry import ROI_SIZE, build_volume_transform, dense_label
+from .geometry import ROI_SIZE, build_volume_transform
 from .manifest import load, resolve_paths
 from .organs import ORGAN_NAMES
 
@@ -49,16 +49,16 @@ class AbdominalDataset(BaseDataset):
         row = self.rows[index]
         image_path, mask_path = resolve_paths(self.roots, row)
         data = self.volume_transform({"image": str(image_path), "label": str(mask_path)})
-        data["label"] = dense_label(data["label"])
         data = self.vis_processor(data)
         image = data["image"].as_tensor() if hasattr(data["image"], "as_tensor") else data["image"]
         label = data["label"].as_tensor() if hasattr(data["label"], "as_tensor") else data["label"]
+        seg = label[:, 0].long() if label.ndim == 5 else label[0].long()
         texts = dict(row["organ_texts"])
         if self.text_processor is not None:
             texts = self.text_processor(texts)
         return {
             "image": image.float(),
-            "seg": label[0].long(),
+            "seg": seg,
             "text_input": texts,
             "organ_abnormal_flags": torch.tensor(
                 [bool(row["organ_labels"].get(name, 0)) for name in self.organs], dtype=torch.bool
@@ -77,16 +77,21 @@ class AbdominalBuilder(BaseDatasetBuilder):
 
 @registry.register_processor("abdominal_image_eval")
 class AbdominalImageEvalProcessor(BaseProcessor):
-    def __init__(self):
-        from monai.transforms import CenterSpatialCropd, Compose, ToTensord
-
-        self.transform = Compose([
-            CenterSpatialCropd(keys=("image", "label"), roi_size=ROI_SIZE),
-            ToTensord(keys=("image", "label")),
-        ])
-
     def __call__(self, item):
-        return self.transform(item)
+        views = {"image": [], "label": []}
+        shape = item["image"].shape[1:]
+        high = [max(size - roi, 0) for size, roi in zip(shape, ROI_SIZE)]
+        for fraction in (0.0, 0.5, 1.0):
+            starts = [
+                int(round(high[0] * fraction)),
+                high[1] // 2,
+                high[2] // 2,
+            ]
+            slices = tuple(slice(start, start + roi) for start, roi in zip(starts, ROI_SIZE))
+            for key in views:
+                value = item[key].as_tensor() if hasattr(item[key], "as_tensor") else item[key]
+                views[key].append(value[(slice(None),) + slices])
+        return {key: torch.stack(values) for key, values in views.items()}
 
     @classmethod
     def from_config(cls, cfg=None):
@@ -95,25 +100,44 @@ class AbdominalImageEvalProcessor(BaseProcessor):
 
 @registry.register_task("abdominal_image_text_pretrain")
 class AbdominalImageTextPretrainTask(ImageTextPretrainTask):
+    @staticmethod
+    def _flatten_views(samples):
+        image = samples["image"]
+        if image.ndim != 6:
+            return samples, int(image.shape[0]), int(image.shape[0])
+        batch_size, views = image.shape[:2]
+        samples["image"] = image.flatten(0, 1)
+        samples["seg"] = samples["seg"].flatten(0, 1)
+        flags = samples["organ_abnormal_flags"]
+        samples["organ_abnormal_flags"] = (
+            flags[:, None].expand(batch_size, views, flags.shape[-1]).flatten(0, 1)
+        )
+        samples["text_input"] = {
+            organ: [text for text in texts for _ in range(views)]
+            for organ, texts in samples["text_input"].items()
+        }
+        return samples, batch_size, batch_size * views
+
     @torch.no_grad()
     def evaluation(self, model, data_loader, cuda_enabled=True):
         import torch.distributed as dist
 
-        totals = torch.zeros(2 + len(ORGAN_NAMES) * 2, dtype=torch.float64, device=model.device)
+        totals = torch.zeros(3 + len(ORGAN_NAMES) * 2, dtype=torch.float64, device=model.device)
         for samples in data_loader:
             samples = prepare_sample(samples, cuda_enabled=cuda_enabled)
+            samples, studies, views = self._flatten_views(samples)
             output = model(samples)
             organ_losses = output["organ_wise_loss_itm"]
             if not organ_losses:
                 continue
-            batch_size = int(samples["image"].shape[0])
-            totals[0] += output["loss"].detach().double() * batch_size
-            totals[1] += batch_size
+            totals[0] += output["loss"].detach().double() * views
+            totals[1] += studies
+            totals[2] += views
             for index, organ in enumerate(ORGAN_NAMES):
                 key = f"{organ}_itc"
                 if key in organ_losses:
-                    totals[2 + index * 2] += organ_losses[key].detach().double() * batch_size
-                    totals[3 + index * 2] += batch_size
+                    totals[3 + index * 2] += organ_losses[key].detach().double() * views
+                    totals[4 + index * 2] += views
         if dist.is_available() and dist.is_initialized():
             dist.all_reduce(totals, op=dist.ReduceOp.SUM)
         if not torch.isfinite(totals).all():
@@ -121,13 +145,14 @@ class AbdominalImageTextPretrainTask(ImageTextPretrainTask):
         if totals[1] == 0:
             raise RuntimeError("Validation produced no active organ losses")
         result = {
-            "loss": float((totals[0] / totals[1]).item()),
+            "loss": float((totals[0] / totals[2]).item()),
             "studies": int(totals[1].item()),
+            "views": int(totals[2].item()),
         }
         for index, organ in enumerate(ORGAN_NAMES):
-            count = totals[3 + index * 2]
+            count = totals[4 + index * 2]
             if count > 0:
-                result[f"{organ}_itc"] = float((totals[2 + index * 2] / count).item())
+                result[f"{organ}_itc"] = float((totals[3 + index * 2] / count).item())
         return result
 
     def after_evaluation(self, val_result, **kwargs):

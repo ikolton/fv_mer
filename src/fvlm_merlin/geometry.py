@@ -5,13 +5,23 @@ import torch
 
 from .organs import remap_mask
 
-TARGET_SPACING = (1.5, 1.5, 1.5)
+TARGET_SPACING = (1.5, 1.5, 3.0)
 ROI_SIZE = (112, 256, 352)
 PATCH_SIZE = (16, 16, 32)
 
 
 def build_volume_transform():
-    from monai.transforms import Compose, EnsureTyped, LoadImaged, SpatialPadd, Spacingd
+    from monai.transforms import (
+        Compose,
+        CropForegroundd,
+        EnsureTyped,
+        Lambdad,
+        LoadImaged,
+        ScaleIntensityRanged,
+        SpatialPadd,
+        Spacingd,
+        Transposed,
+    )
 
     return Compose([
         LoadImaged(keys=("image", "label"), image_only=False, ensure_channel_first=True),
@@ -21,7 +31,16 @@ def build_volume_transform():
             mode=("bilinear", "nearest"),
             padding_mode="border",
         ),
-        SpatialPadd(keys=("image", "label"), spatial_size=ROI_SIZE),
+        EnsureTyped(keys=("image", "label")),
+        Lambdad(keys="label", func=dense_label),
+        Transposed(keys=("image", "label"), indices=(0, 3, 2, 1)),
+        ScaleIntensityRanged(
+            keys="image", a_min=-1150, a_max=350, b_min=0.0, b_max=1.0, clip=True
+        ),
+        CropForegroundd(
+            keys=("image", "label"), source_key="label", margin=(5, 20, 20), allow_smaller=True
+        ),
+        SpatialPadd(keys=("image", "label"), spatial_size=ROI_SIZE, mode="constant"),
         EnsureTyped(keys=("image", "label")),
     ])
 
@@ -38,4 +57,3 @@ def crop_bounds(center: np.ndarray, shape: tuple[int, int, int]) -> tuple[slice,
         high = max(shape[axis] - size, 0)
         starts.append(max(0, min(int(round(center[axis] - size / 2)), high)))
     return tuple(slice(start, start + ROI_SIZE[axis]) for axis, start in enumerate(starts))
-

@@ -42,7 +42,7 @@ The presets are:
 - `merlin`: Merlin training data and its validation manifest.
 - `pooled`: Merlin, Swiss, and Turkish training data with the Merlin validation manifest.
 
-Training optimizes the original fVLM objective on the train split. After every epoch it evaluates the same objective on the complete Merlin validation split using deterministic 3D center crops. Validation logs include total and organ-wise losses, and the lowest total validation loss selects `checkpoint_best.pth`.
+Training optimizes the original fVLM objective on the train split. After every epoch it evaluates the same objective on the complete Merlin validation split using deterministic upper, middle, and lower abdominal views. Validation logs include total and organ-wise losses, and the lowest total validation loss selects `checkpoint_best.pth`.
 
 ### 2. Run a smoke test
 
@@ -119,7 +119,7 @@ Merging verifies the schema, checkpoint, manifest checksum, shard count, and rec
 
 Data presets in `configs/data/` define shared roots, annotations, and split membership. Generated manifests retain root aliases and relative image paths, making them portable between users with access to the same roots. Rows without converted image or mask files are skipped by the shared presets and listed in `summary.json`.
 
-Images and masks are resampled together to 1.5 mm isotropic spacing. Images use continuous interpolation and masks use nearest-neighbour interpolation before fVLM cropping. Source segmentation IDs are remapped to the fixed organ order in `src/fvlm_merlin/organs.py`.
+Images and masks are resampled together to 1.5×1.5×3 mm spacing, transposed to depth-first order, and cropped around the supported abdominal organs before fVLM augmentation. Images use continuous interpolation and masks use nearest-neighbour interpolation. Image intensities are clipped to `[-1150, 350]` HU and scaled to `[0, 1]`; source segmentation IDs are remapped to the fixed organ order in `src/fvlm_merlin/organs.py`.
 
 Dataset captions are passed through unchanged. The fVLM objective identifies canonical normal captions by their normal-text prefix.
 

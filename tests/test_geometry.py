@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import numpy as np
+import nibabel as nib
 import torch
 
 import fvlm_merlin.geometry as geometry
 from fvlm_merlin.features import _organ_crops
-from fvlm_merlin.geometry import crop_bounds, dense_label
+from fvlm_merlin.geometry import build_volume_transform, crop_bounds, dense_label
 from fvlm_merlin.organs import ORGAN_BY_NAME
 
 
@@ -49,3 +50,21 @@ def test_organ_crops_center_present_organs_and_mark_absent_ones(monkeypatch) -> 
     assert present.sum().item() == 1
     assert present[liver.dense_id - 1]
     assert (masks[liver.dense_id - 1] == liver.dense_id).sum().item() == 1
+
+
+def test_volume_transform_matches_fvlm_input_conventions(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(geometry, "ROI_SIZE", (8, 10, 12))
+    image = np.linspace(-1200, 400, 12 * 10 * 8, dtype=np.float32).reshape(12, 10, 8)
+    mask = np.zeros_like(image, dtype=np.int16)
+    mask[2:10, 2:8, 1:7] = ORGAN_BY_NAME["liver"].source_id
+    affine = np.diag((1.5, 1.5, 3.0, 1.0))
+    image_path, mask_path = tmp_path / "image.nii.gz", tmp_path / "mask.nii.gz"
+    nib.save(nib.Nifti1Image(image, affine), image_path)
+    nib.save(nib.Nifti1Image(mask, affine), mask_path)
+
+    result = build_volume_transform()({"image": image_path, "label": mask_path})
+
+    assert result["image"].shape == (1, 8, 10, 12)
+    assert result["label"].shape == (1, 8, 10, 12)
+    assert result["image"].min() >= 0 and result["image"].max() <= 1
+    assert set(result["label"].unique().tolist()) == {0, ORGAN_BY_NAME["liver"].dense_id}

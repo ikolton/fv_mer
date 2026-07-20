@@ -10,7 +10,7 @@ import torch
 import torch.nn.functional as F
 
 from .config import PROJECT_ROOT, fvlm_root
-from .geometry import PATCH_SIZE, ROI_SIZE, build_volume_transform, crop_bounds, dense_label
+from .geometry import PATCH_SIZE, ROI_SIZE, TARGET_SPACING, build_volume_transform, crop_bounds
 from .manifest import checksum, load, resolve_paths
 from .organs import ORGANS, ORGAN_NAMES
 
@@ -90,8 +90,7 @@ def export(manifest_path: Path, config_path: Path, checkpoint_path: Path, output
         for index, row in enumerate(rows, 1):
             image_path, mask_path = resolve_paths(roots, row)
             data = transform({"image": str(image_path), "label": str(mask_path)})
-            mask = dense_label(data["label"])
-            crops, crop_masks, present = _organ_crops(data["image"], mask)
+            crops, crop_masks, present = _organ_crops(data["image"], data["label"])
             organ_embeddings = _embeddings(model, crops, crop_masks, device)
             records[f"{row['dataset']}:{row['study_id']}"] = {
                 "dataset": row["dataset"],
@@ -109,7 +108,7 @@ def export(manifest_path: Path, config_path: Path, checkpoint_path: Path, output
             "checkpoint": str(checkpoint_path.resolve()),
             "manifest": str(manifest_path.resolve()),
             "manifest_sha256": checksum(manifest_path),
-            "target_spacing": [1.5, 1.5, 1.5],
+            "target_spacing": list(TARGET_SPACING),
             "roi_size": list(ROI_SIZE),
             "num_shards": num_shards,
             "shard_index": shard_index,
