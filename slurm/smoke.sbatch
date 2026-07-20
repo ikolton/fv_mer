@@ -15,6 +15,7 @@ ROOT="${FVLM_MERLIN_ROOT:-${SLURM_SUBMIT_DIR:?Submit smoke through scripts/submi
 cd "$ROOT"
 source /usr/share/lmod/lmod/init/bash >/dev/null 2>&1 || true
 module purge >/dev/null 2>&1 || true
+module load GCCcore/13.2.0
 set +e
 module load ML-bundle/24.06a
 MODULE_STATUS=$?
