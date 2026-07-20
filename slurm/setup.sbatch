@@ -2,6 +2,7 @@
 #SBATCH --job-name=fvlm-setup
 #SBATCH --partition=plgrid-gpu-gh200
 #SBATCH --nodes=1
+#SBATCH --exclude=x1002c4s0b1n0
 #SBATCH --ntasks=1
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8

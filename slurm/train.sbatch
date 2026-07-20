@@ -2,6 +2,7 @@
 #SBATCH --job-name=fvlm-train
 #SBATCH --partition=plgrid-gpu-gh200
 #SBATCH --nodes=1
+#SBATCH --exclude=x1002c4s0b1n0
 #SBATCH --cpus-per-task=16
 #SBATCH --time=2-00:00:00
 
