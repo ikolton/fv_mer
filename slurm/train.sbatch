@@ -10,7 +10,7 @@ ROOT="${FVLM_MERLIN_ROOT:-${SLURM_SUBMIT_DIR:?Submit training through scripts/su
 cd "$ROOT"
 source /usr/share/lmod/lmod/init/bash >/dev/null 2>&1 || true
 module purge >/dev/null 2>&1 || true
-module use /net/software/aarch64/el9modules/all/Core
+export MODULEPATH=/net/software/aarch64/el9modules/all/Core
 module load GCCcore/13.2.0
 set +e
 module load ML-bundle/24.06a
