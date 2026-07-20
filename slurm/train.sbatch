@@ -6,7 +6,7 @@
 #SBATCH --time=2-00:00:00
 
 set -euo pipefail
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT="${FVLM_MERLIN_ROOT:-${SLURM_SUBMIT_DIR:?Submit training through scripts/submit_train.sh}}"
 cd "$ROOT"
 source /usr/share/lmod/lmod/init/bash >/dev/null 2>&1 || true
 set +e

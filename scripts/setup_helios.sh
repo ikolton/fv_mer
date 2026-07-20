@@ -4,6 +4,5 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 mkdir -p logs
 git submodule update --init --recursive
-sbatch --wait slurm/setup.sbatch
+sbatch --wait --export=ALL,FVLM_MERLIN_ROOT="$ROOT" slurm/setup.sbatch
 echo "Environment ready: $ROOT/.venv"
-

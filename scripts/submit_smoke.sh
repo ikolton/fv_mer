@@ -8,6 +8,7 @@ if [[ "$GPUS" != "1" && "$GPUS" != "2" ]]; then
   exit 2
 fi
 mkdir -p "$ROOT/logs"
-JOB_ID="$(sbatch --parsable --gres="gpu:$GPUS" --export=ALL,DATA_PRESET="$PRESET",GPUS="$GPUS" "$ROOT/slurm/smoke.sbatch")"
+JOB_ID="$(sbatch --parsable --gres="gpu:$GPUS" \
+  --export=ALL,FVLM_MERLIN_ROOT="$ROOT",DATA_PRESET="$PRESET",GPUS="$GPUS" "$ROOT/slurm/smoke.sbatch")"
 echo "Smoke queued: $JOB_ID"
 echo "Log: $ROOT/logs/smoke_${JOB_ID}.out"

@@ -11,7 +11,6 @@ mkdir -p "$ROOT/logs"
 MEMORY=$((90 * GPUS))G
 JOB_ID="$(sbatch --parsable --ntasks-per-node="$GPUS" --gres="gpu:$GPUS" --mem="$MEMORY" \
   --output="$ROOT/logs/train_%j.out" --error="$ROOT/logs/train_%j.err" \
-  --export=ALL,DATA_PRESET="$PRESET",GPUS="$GPUS" "$ROOT/slurm/train.sbatch")"
+  --export=ALL,FVLM_MERLIN_ROOT="$ROOT",DATA_PRESET="$PRESET",GPUS="$GPUS" "$ROOT/slurm/train.sbatch")"
 echo "Training queued: $JOB_ID"
 echo "Log: $ROOT/logs/train_${JOB_ID}.out"
-

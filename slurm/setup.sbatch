@@ -11,7 +11,7 @@
 #SBATCH --error=logs/setup_%j.err
 
 set -euo pipefail
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT="${FVLM_MERLIN_ROOT:-${SLURM_SUBMIT_DIR:?Run setup from the project root}}"
 cd "$ROOT"
 source /usr/share/lmod/lmod/init/bash >/dev/null 2>&1 || true
 set +e
