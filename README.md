@@ -1,6 +1,6 @@
 # fVLM Merlin
 
-Train the fVLM visual-language encoder on abdominal CT data and export reusable per-organ features. The project uses the original fVLM objective with an 11-organ abdominal model. It does not include a report decoder or diagnostic loss.
+Train the fVLM visual-language encoder on abdominal CT data and export reusable per-organ features. The project uses the original fVLM objective with an 11-organ abdominal model.
 
 ## Helios setup
 
@@ -58,6 +58,6 @@ Data presets contain shared roots and source split definitions. Copy a preset to
 
 Images and masks are resampled together to 1.5 mm isotropic spacing. Images use continuous interpolation and masks use nearest-neighbour interpolation before fVLM cropping.
 
-The inherited fVLM loss groups normal captions through its canonical normal-text prefix. Dataset captions are passed through unchanged; normal-caption normalization is intentionally outside this project.
+Dataset captions are passed through unchanged. The fVLM objective identifies canonical normal captions by their normal-text prefix.
 
 For another Linux/CUDA system, create a Python environment with a compatible PyTorch and MONAI installation, install this package with `pip install -e '.[test]'`, set dataset roots in a data preset, and use the same CLI commands. Set `FVLM_ROOT` to use an fVLM checkout outside this repository.
